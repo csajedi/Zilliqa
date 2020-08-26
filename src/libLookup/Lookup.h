@@ -289,7 +289,7 @@ class Lookup : public Executable {
   bool GetMyLookupOnline(bool fromRecovery = false);
 
   // Rejoin the network as a lookup node in case of failure happens in protocol
-  void RejoinAsLookup();
+  void RejoinAsLookup(bool fromLookup = true);
 
   // Rejoin the network as a newlookup node in case of failure happens in
   // protocol

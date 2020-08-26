@@ -2744,20 +2744,6 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
   //    Data::GetInstance().SetDSPeers(dsPeers);
   //#endif // IS_LOOKUP_NODE
 
-  /*
-  if ((!LOOKUP_NODE_MODE && m_dsInfoWaitingNotifying &&
-       (m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0)) ||
-      (LOOKUP_NODE_MODE &&
-       (m_syncType == SyncType::NEW_LOOKUP_SYNC ||
-        m_syncType == SyncType::LOOKUP_SYNC) &&
-       m_dsInfoWaitingNotifying)) {
-    LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-              "Notifying that DSInfo has been received");
-    unique_lock<mutex> lock(m_mutexDSInfoUpdation);
-    m_fetchedDSInfo = true;
-  }
-  */
-
   if (m_dsInfoWaitingNotifying &&
       (m_syncType != NO_SYNC ||
        m_mediator.m_currentEpochNum % NUM_FINAL_BLOCK_PER_POW == 0)) {
@@ -3021,7 +3007,11 @@ bool Lookup::GetDSInfo() {
   LOG_MARKER();
   m_dsInfoWaitingNotifying = true;
 
-  GetDSInfoFromSeedNodes();
+  if (LOOKUP_NODE_MODE & !ARCHIVAL_LOOKUP) {
+    GetDSInfoFromSeedNodes();
+  } else {
+    GetDSInfoFromLookupNodes();
+  }
 
   {
     unique_lock<mutex> lock(m_mutexDSInfoUpdation);
@@ -3557,30 +3547,7 @@ bool Lookup::ProcessSetStateFromSeed(const bytes& message, unsigned int offset,
   if (!LOOKUP_NODE_MODE) {
     if (m_syncType == SyncType::NEW_SYNC ||
         m_syncType == SyncType::NORMAL_SYNC) {
-      m_dsInfoWaitingNotifying = true;
-
-      GetDSInfoFromSeedNodes();
-
-      {
-        unique_lock<mutex> lock(m_mutexDSInfoUpdation);
-        while (!m_fetchedDSInfo) {
-          LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "Waiting for DSInfo");
-
-          if (cv_dsInfoUpdate.wait_for(
-                  lock, chrono::seconds(NEW_NODE_SYNC_INTERVAL)) ==
-              std::cv_status::timeout) {
-            // timed out
-            LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-                      "Timed out waiting for DSInfo");
-            m_dsInfoWaitingNotifying = false;
-            return false;
-          }
-          LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-                    "Get ProcessDsInfo Notified");
-          m_dsInfoWaitingNotifying = false;
-        }
-        m_fetchedDSInfo = false;
-      }
+      GetDSInfo();
 
       LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
                 "DSInfo received -> Ask lookup to let me know when to "
@@ -3640,30 +3607,7 @@ bool Lookup::ProcessSetStateFromSeed(const bytes& message, unsigned int offset,
     }
     m_currDSExpired = false;
   } else if (LOOKUP_NODE_MODE && m_syncType == SyncType::NEW_LOOKUP_SYNC) {
-    m_dsInfoWaitingNotifying = true;
-
-    GetDSInfoFromSeedNodes();
-
-    {
-      unique_lock<mutex> lock(m_mutexDSInfoUpdation);
-      while (!m_fetchedDSInfo) {
-        LOG_EPOCH(INFO, m_mediator.m_currentEpochNum, "Waiting for DSInfo");
-
-        if (cv_dsInfoUpdate.wait_for(lock,
-                                     chrono::seconds(NEW_NODE_SYNC_INTERVAL)) ==
-            std::cv_status::timeout) {
-          // timed out
-          LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-                    "Timed out waiting for DSInfo");
-          m_dsInfoWaitingNotifying = false;
-          return false;
-        }
-        LOG_EPOCH(INFO, m_mediator.m_currentEpochNum,
-                  "Get ProcessDsInfo Notified");
-        m_dsInfoWaitingNotifying = false;
-      }
-      m_fetchedDSInfo = false;
-    }
+    GetDSInfo();
 
     if (!m_currDSExpired) {
       SetSyncType(SyncType::NO_SYNC);
@@ -4496,30 +4440,30 @@ void Lookup::StartSynchronization() {
 
   LOG_MARKER();
 
-  if (ARCHIVAL_LOOKUP) {
-    auto func = [this]() -> void {
-      GetDSInfoFromSeedNodes();
-      while (GetSyncType() != SyncType::NO_SYNC) {
-        GetDSBlockFromSeedNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0,
-                                true);
-        GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
-        this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
-      }
-    };
-    DetachedFunction(1, func);
-  } else {
-    auto func = [this]() -> void {
+  auto func = [this]() -> void {
+    if (!ARCHIVAL_LOOKUP) {
       GetMyLookupOffline();
-      GetDSInfoFromLookupNodes();
-      while (GetSyncType() != SyncType::NO_SYNC) {
-        GetDSBlockFromLookupNodes(m_mediator.m_dsBlockChain.GetBlockCount(), 0,
-                                  true);
-        GetTxBlockFromLookupNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
-        this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
-      }
-    };
-    DetachedFunction(1, func);
-  }
+    }
+    while (GetSyncType() != SyncType::NO_SYNC) {
+      ComposeAndSendGetDirectoryBlocksFromSeed(
+          m_mediator.m_blocklinkchain.GetLatestIndex() + 1, ARCHIVAL_LOOKUP,
+          LOOKUP_NODE_MODE);
+      GetTxBlockFromLookupNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
+    }
+    // Ask for the sharding structure from lookup (may have got new ds block
+    // with new sharding struct)
+    ComposeAndSendGetShardingStructureFromSeed();
+    std::unique_lock<std::mutex> cv_lk(m_mutexShardStruct);
+    if (cv_shardStruct.wait_for(
+            cv_lk, std::chrono::seconds(GETSHARD_TIMEOUT_IN_SECONDS)) ==
+        std::cv_status::timeout) {
+      LOG_GENERAL(WARNING, "Didn't receive sharding structure!");
+    } else {
+      ProcessEntireShardingStructure();
+    }
+  };
+  DetachedFunction(1, func);
 }
 
 bool Lookup::GetDSInfoLoop() {
@@ -4756,7 +4700,7 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
   }
 }
 
-void Lookup::RejoinAsLookup() {
+void Lookup::RejoinAsLookup(bool fromLookup) {
   if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(WARNING,
                 "Lookup::RejoinAsLookup not expected to be called from "
@@ -4781,9 +4725,39 @@ void Lookup::RejoinAsLookup() {
 
     DetachedFunction(1, func1);
 
-    auto func2 = [this]() -> void { StartSynchronization(); };
-
-    DetachedFunction(1, func2);
+    if (fromLookup) {  // Lookup syncing from other lookups
+      LOG_GENERAL(INFO, "Syncing from lookup ...");
+      auto func2 = [this]() mutable -> void { StartSynchronization(); };
+      DetachedFunction(1, func2);
+    } else {
+      LOG_GENERAL(INFO, "Syncing from S3 ...");
+      auto func2 = [this]() mutable -> void {
+        while (true) {
+          this->CleanVariables();
+          m_mediator.m_node->CleanUnavailableMicroBlocks();
+          while (!m_mediator.m_node->DownloadPersistenceFromS3()) {
+            LOG_GENERAL(
+                WARNING,
+                "Downloading persistence from S3 has failed. Will try again!");
+            this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
+          }
+          if (!BlockStorage::GetBlockStorage().RefreshAll()) {
+            LOG_GENERAL(WARNING, "BlockStorage::RefreshAll failed");
+            return;
+          }
+          if (!AccountStore::GetInstance().RefreshDB()) {
+            LOG_GENERAL(WARNING, "BlockStorage::RefreshDB failed");
+            return;
+          }
+          if (m_mediator.m_node->Install(SyncType::LOOKUP_SYNC, true)) {
+            break;
+          };
+          this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
+        }
+        InitSync();
+      };
+      DetachedFunction(1, func2);
+    }
   }
 }
 
@@ -5185,6 +5159,8 @@ void Lookup::ComposeAndSendGetShardingStructureFromSeed() {
   }
   if (LOOKUP_NODE_MODE && ARCHIVAL_LOOKUP && !MULTIPLIER_SYNC_MODE) {
     SendMessageToRandomL2lDataProvider(message);
+  } else if (LOOKUP_NODE_MODE & !ARCHIVAL_LOOKUP) {
+    SendMessageToRandomLookupNode(message);
   } else {
     SendMessageToRandomSeedNode(message);
   }
@@ -5944,11 +5920,11 @@ void Lookup::FetchMbTxPendingTxMessageFromL2l(uint64_t blockNum) {
 }
 
 void Lookup::CheckAndFetchUnavailableMBs(bool skipLatestTxBlk) {
-  if (!LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
+  if (!LOOKUP_NODE_MODE) {
     LOG_GENERAL(
         WARNING,
         "Lookup::CheckAndFetchUnavailableMBs not expected to be called from "
-        "other than the ARCHIVAL LOOKUP.");
+        "other than the LOOKUP.");
     return;
   }
   LOG_MARKER();

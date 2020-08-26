@@ -707,7 +707,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Lets check if its legitimate hash check failure, if i am lagging behind
     // in prev ds epoch.
     if (!m_mediator.m_lookup->m_confirmedLatestDSBlock) {
-      // Check if I have a latest DS block (but do it only once in current ds
+      // Check if I have a latest DS Info (but do it only once in current ds
       // epoch)
       uint64_t latestDSBlockNum =
           m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum();
@@ -716,15 +716,15 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
 
       if (recvdDsBlockNum > latestDSBlockNum) {
         auto func = [this]() -> void {
-          if (GetLatestDSBlock()) {
-            LOG_GENERAL(
-                INFO, "Recvd newer DSBlock. I am lagging behind. Will Rejoin!");
+          if (!m_mediator.m_lookup->GetDSInfo()) {
+            LOG_GENERAL(INFO,
+                        "I am lagging behind actual ds epoch. Will Rejoin!");
             if (ARCHIVAL_LOOKUP) {
               // Sync from S3
               m_mediator.m_lookup->RejoinAsNewLookup(false);
-            } else  // Lookup
+            } else  // Lookup - sync from S3
             {
-              m_mediator.m_lookup->RejoinAsLookup();
+              m_mediator.m_lookup->RejoinAsLookup(false);
             }
           }
         };
