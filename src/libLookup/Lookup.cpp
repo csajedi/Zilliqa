@@ -4754,7 +4754,7 @@ void Lookup::RejoinAsLookup(bool fromLookup) {
           };
           this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
         }
-        InitSync();
+        StartSynchronization();
       };
       DetachedFunction(1, func2);
     }
