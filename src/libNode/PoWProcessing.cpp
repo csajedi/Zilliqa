@@ -52,10 +52,18 @@ bool Node::GetLatestDSBlock() {
   unsigned int counter = 1;
   while (!m_mediator.m_lookup->m_fetchedLatestDSBlock &&
          counter <= FETCH_LOOKUP_MSG_MAX_RETRY) {
-    m_synchronizer.FetchLatestDSBlocksSeed(
-        m_mediator.m_lookup,
-        m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() + 1);
+    if (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
+      m_synchronizer.FetchLatestDSBlocks(
+          m_mediator.m_lookup,
+          m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
+              1);
 
+    } else {
+      m_synchronizer.FetchLatestDSBlocksSeed(
+          m_mediator.m_lookup,
+          m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
+              1);
+    }
     {
       unique_lock<mutex> lock(
           m_mediator.m_lookup->m_mutexLatestDSBlockUpdation);
