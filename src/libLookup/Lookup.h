@@ -477,6 +477,7 @@ class Lookup : public Executable {
   bool m_fetchedLatestDSBlock = false;
   std::mutex m_mutexLatestDSBlockUpdation;
   std::condition_variable cv_latestDSBlock;
+  bool m_confirmedLatestDSBlock = false;
 
   std::mutex m_MutexCVSetTxBlockFromSeed;
   std::condition_variable cv_setTxBlockFromSeed;

@@ -4822,6 +4822,8 @@ bool Lookup::CleanVariables() {
   m_mediator.m_node->CleanWhitelistReqs();
   m_mediator.m_node->ClearAllPendingAndDroppedTxn();
 
+  m_confirmedLatestDSBlock = false;
+
   return true;
 }
 
