@@ -301,7 +301,7 @@ bool Validator::CheckDirBlocks(
     const vector<boost::variant<DSBlock, VCBlock,
                                 FallbackBlockWShardingStructure>>& dirBlocks,
     const DequeOfNode& initDsComm, const uint64_t& index_num,
-    DequeOfNode& newDSComm) {
+    DequeOfNode& newDSComm, Mediator& mediator) {
   DequeOfNode mutable_ds_comm = initDsComm;
 
   bool ret = true;
@@ -361,6 +361,33 @@ bool Validator::CheckDirBlocks(
         return false;
       }
       m_mediator.m_node->UpdateDSCommitteeComposition(mutable_ds_comm, dsblock);
+
+      if (ret && LOOKUP_NODE_MODE & !ARCHIVAL_LOOKUP &&
+          mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC) {
+        if (mediator.m_lookup->m_fetchedDSComms.find(
+                dsblock.GetHeader().GetBlockNum()) !=
+            mediator.m_lookup->m_fetchedDSComms.end()) {
+          mediator.m_lookup
+              ->m_fetchedDSComms[dsblock.GetHeader().GetBlockNum()] =
+              mutable_ds_comm;
+        } else {
+          mediator.m_lookup->m_fetchedDSComms.emplace(
+              dsblock.GetHeader().GetBlockNum(), mutable_ds_comm);
+        }
+
+        if (mediator.m_lookup->m_fetchedBlocklinks.find(
+                dsblock.GetHeader().GetBlockNum()) !=
+            mediator.m_lookup->m_fetchedBlocklinks.end()) {
+          mediator.m_lookup
+              ->m_fetchedBlocklinks[dsblock.GetHeader().GetBlockNum()] =
+              m_mediator.m_blocklinkchain.GetLatestBlockLink();
+        } else {
+          mediator.m_lookup->m_fetchedBlocklinks.emplace(
+              dsblock.GetHeader().GetBlockNum(),
+              m_mediator.m_blocklinkchain.GetLatestBlockLink());
+        }
+      }
+
       totalIndex++;
       if (!BlockStorage::GetBlockStorage().ResetDB(BlockStorage::STATE_DELTA)) {
         LOG_GENERAL(WARNING, "BlockStorage::ResetDB failed");
@@ -405,9 +432,33 @@ bool Validator::CheckDirBlocks(
 
       m_mediator.m_node->UpdateRetrieveDSCommitteeCompositionAfterVC(
           vcblock, mutable_ds_comm);
+      if (ret && LOOKUP_NODE_MODE & !ARCHIVAL_LOOKUP &&
+          mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC) {
+        mediator.m_lookup->m_fetchedDSComms.emplace(prevdsblocknum,
+                                                    mutable_ds_comm);
+      }
       m_mediator.m_blocklinkchain.AddBlockLink(totalIndex, prevdsblocknum + 1,
                                                BlockType::VC,
                                                vcblock.GetBlockHash());
+      if (ret && LOOKUP_NODE_MODE & !ARCHIVAL_LOOKUP &&
+          mediator.m_lookup->GetSyncType() == SyncType::LOOKUP_SYNC) {
+        if (mediator.m_lookup->m_fetchedDSComms.find(prevdsblocknum) !=
+            mediator.m_lookup->m_fetchedDSComms.end()) {
+          mediator.m_lookup->m_fetchedDSComms[prevdsblocknum] = mutable_ds_comm;
+        } else {
+          mediator.m_lookup->m_fetchedDSComms.emplace(prevdsblocknum,
+                                                      mutable_ds_comm);
+        }
+
+        if (mediator.m_lookup->m_fetchedBlocklinks.find(prevdsblocknum) !=
+            mediator.m_lookup->m_fetchedBlocklinks.end()) {
+          mediator.m_lookup->m_fetchedBlocklinks[prevdsblocknum] =
+              m_mediator.m_blocklinkchain.GetLatestBlockLink();
+        } else {
+          mediator.m_lookup->m_fetchedBlocklinks.emplace(
+              prevdsblocknum, m_mediator.m_blocklinkchain.GetLatestBlockLink());
+        }
+      }
       bytes vcblockserialized;
       vcblock.Serialize(vcblockserialized, 0);
       if (!BlockStorage::GetBlockStorage().PutVCBlock(vcblock.GetBlockHash(),

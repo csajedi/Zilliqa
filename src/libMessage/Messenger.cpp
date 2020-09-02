@@ -5967,7 +5967,8 @@ bool Messenger::SetLookupGetTxBlockFromSeed(bytes& dst,
                                             const unsigned int offset,
                                             const uint64_t lowBlockNum,
                                             const uint64_t highBlockNum,
-                                            const uint32_t listenPort) {
+                                            const uint32_t listenPort,
+                                            const PubKey& pubKey) {
   LOG_MARKER();
 
   LookupGetTxBlockFromSeed result;
@@ -5975,6 +5976,7 @@ bool Messenger::SetLookupGetTxBlockFromSeed(bytes& dst,
   result.set_lowblocknum(lowBlockNum);
   result.set_highblocknum(highBlockNum);
   result.set_listenport(listenPort);
+  SerializableToProtobufByteArray(pubKey, *result.mutable_senderpubkey());
 
   if (!result.IsInitialized()) {
     LOG_GENERAL(WARNING, "LookupGetTxBlockFromSeed initialization failed");
@@ -6290,11 +6292,9 @@ bool Messenger::GetLookupGetPendingTxnFromL2l(const bytes& src,
   return true;
 }
 
-bool Messenger::GetLookupGetTxBlockFromSeed(const bytes& src,
-                                            const unsigned int offset,
-                                            uint64_t& lowBlockNum,
-                                            uint64_t& highBlockNum,
-                                            uint32_t& listenPort) {
+bool Messenger::GetLookupGetTxBlockFromSeed(
+    const bytes& src, const unsigned int offset, uint64_t& lowBlockNum,
+    uint64_t& highBlockNum, uint32_t& listenPort, PubKey& senderPubKey) {
   LOG_MARKER();
 
   if (offset >= src.size()) {
@@ -6314,6 +6314,7 @@ bool Messenger::GetLookupGetTxBlockFromSeed(const bytes& src,
   lowBlockNum = result.lowblocknum();
   highBlockNum = result.highblocknum();
   listenPort = result.listenport();
+  PROTOBUFBYTEARRAYTOSERIALIZABLE(result.senderpubkey(), senderPubKey);
 
   return true;
 }

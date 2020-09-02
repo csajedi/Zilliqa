@@ -523,12 +523,13 @@ class Messenger {
   static bool SetLookupGetTxBlockFromSeed(bytes& dst, const unsigned int offset,
                                           const uint64_t lowBlockNum,
                                           const uint64_t highBlockNum,
-                                          const uint32_t listenPort);
+                                          const uint32_t listenPort,
+                                          const PubKey& pubKey);
   static bool GetLookupGetTxBlockFromSeed(const bytes& src,
                                           const unsigned int offset,
                                           uint64_t& lowBlockNum,
                                           uint64_t& highBlockNum,
-                                          uint32_t& listenPort);
+                                          uint32_t& listenPort, PubKey& pubKey);
   static bool SetLookupGetVCFinalBlockFromL2l(bytes& dst,
                                               const unsigned int offset,
                                               const uint64_t& blockNum,

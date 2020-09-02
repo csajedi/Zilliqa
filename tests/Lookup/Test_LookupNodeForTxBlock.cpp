@@ -144,12 +144,13 @@ BOOST_AUTO_TEST_CASE(testTxBlockRetrieval) {
   struct in_addr ip_addr {};
   inet_pton(AF_INET, "127.0.0.1", &ip_addr);
   Peer lookup_node((uint128_t)ip_addr.s_addr, listen_port);
+  PairOfKey keys = Schnorr::GenKeyPair();
 
   bytes getTxBlockMessage = {MessageType::LOOKUP,
                              LookupInstructionType::GETTXBLOCKFROMSEED};
 
   if (!Messenger::SetLookupGetTxBlockFromSeed(
-          getTxBlockMessage, MessageOffset::BODY, 0, 1, 5000)) {
+          getTxBlockMessage, MessageOffset::BODY, 0, 1, 5000, keys.second)) {
     LOG_GENERAL(WARNING, "Messenger::SetLookupGetTxBlockFromSeed failed.");
   } else {
     P2PComm::GetInstance().SendMessage(lookup_node, getTxBlockMessage);

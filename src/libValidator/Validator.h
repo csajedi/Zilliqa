@@ -54,7 +54,7 @@ class Validator {
       const std::vector<boost::variant<
           DSBlock, VCBlock, FallbackBlockWShardingStructure>>& dirBlocks,
       const DequeOfNode& initDsComm, const uint64_t& index_num,
-      DequeOfNode& newDSComm);
+      DequeOfNode& newDSComm, Mediator& mediator);
 
   bool CheckDirBlocksNoUpdate(
       const std::vector<boost::variant<

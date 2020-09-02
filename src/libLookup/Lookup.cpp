@@ -900,7 +900,8 @@ bytes Lookup::ComposeGetTxBlockMessage(uint64_t lowBlockNum,
 
   if (!Messenger::SetLookupGetTxBlockFromSeed(
           getTxBlockMessage, MessageOffset::BODY, lowBlockNum, highBlockNum,
-          m_mediator.m_selfPeer.m_listenPortHost)) {
+          m_mediator.m_selfPeer.m_listenPortHost,
+          m_mediator.m_selfKey.second)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::SetLookupGetTxBlockFromSeed failed.");
     return {};
@@ -1921,9 +1922,10 @@ bool Lookup::ProcessGetTxBlockFromSeed(const bytes& message,
   uint64_t lowBlockNum = 0;
   uint64_t highBlockNum = 0;
   uint32_t portNo = 0;
+  PubKey senderPubKey;
 
-  if (!Messenger::GetLookupGetTxBlockFromSeed(message, offset, lowBlockNum,
-                                              highBlockNum, portNo)) {
+  if (!Messenger::GetLookupGetTxBlockFromSeed(
+          message, offset, lowBlockNum, highBlockNum, portNo, senderPubKey)) {
     LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
               "Messenger::GetLookupGetTxBlockFromSeed failed.");
     return false;
@@ -1935,7 +1937,8 @@ bool Lookup::ProcessGetTxBlockFromSeed(const bytes& message,
                                                       << highBlockNum);
 
   vector<TxBlock> txBlocks;
-  RetrieveTxBlocks(txBlocks, lowBlockNum, highBlockNum);
+  RetrieveTxBlocks(txBlocks, lowBlockNum, highBlockNum,
+                   IsLookupNode(senderPubKey));
 
   bytes txBlockMessage = {MessageType::LOOKUP,
                           LookupInstructionType::SETTXBLOCKFROMSEED};
@@ -1959,7 +1962,8 @@ bool Lookup::ProcessGetTxBlockFromSeed(const bytes& message,
 // lowBlockNum = 0 => lowBlockNum set to 1
 // highBlockNum = 0 => Latest block number
 void Lookup::RetrieveTxBlocks(vector<TxBlock>& txBlocks, uint64_t& lowBlockNum,
-                              uint64_t& highBlockNum) {
+                              uint64_t& highBlockNum,
+                              bool allowFromPrevDSEpoch) {
   lock_guard<mutex> g(m_mediator.m_node->m_mutexFinalBlock);
 
   if (lowBlockNum == 0) {
@@ -1968,9 +1972,11 @@ void Lookup::RetrieveTxBlocks(vector<TxBlock>& txBlocks, uint64_t& lowBlockNum,
 
   uint64_t lowestLimitNum =
       m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetEpochNum();
-  if (lowBlockNum < lowestLimitNum) {
+  if ((allowFromPrevDSEpoch && (lowBlockNum < (lowestLimitNum + 1))) ||
+      (!allowFromPrevDSEpoch && (lowBlockNum < lowestLimitNum))) {
     LOG_GENERAL(WARNING,
-                "Requested number of txBlocks are beyond the current DS epoch "
+                "Requested number of txBlocks are beyond the allowed "
+                "(current/previous) DS epoch "
                 "(lowBlockNum :"
                     << lowBlockNum << ", lowestLimitNum : " << lowestLimitNum
                     << ")");
@@ -2823,7 +2829,7 @@ bool Lookup::ProcessSetDSBlockFromSeed(const bytes& message,
       DequeOfNode newDScomm;
       if (!m_mediator.m_validator->CheckDirBlocks(
               dirBlocks, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
-              index_num, newDScomm)) {
+              index_num, newDScomm, m_mediator)) {
         LOG_GENERAL(WARNING, "Could not verify all DS blocks");
       }
       m_mediator.m_blocklinkchain.SetBuiltDSComm(newDScomm);
@@ -2969,9 +2975,22 @@ bool Lookup::ProcessSetTxBlockFromSeed(const bytes& message,
                   << latestSynBlockNum << " highBlockNum=" << highBlockNum);
     return false;
   } else {
-    auto res = m_mediator.m_validator->CheckTxBlocks(
-        txBlocks, m_mediator.m_blocklinkchain.GetBuiltDSComm(),
-        m_mediator.m_blocklinkchain.GetLatestBlockLink());
+    DequeOfNode dsComm = m_mediator.m_blocklinkchain.GetBuiltDSComm();
+    BlockLink blocklink = m_mediator.m_blocklinkchain.GetLatestBlockLink();
+    if (LOOKUP_NODE_MODE && !ARCHIVAL_LOOKUP) {
+      auto it1 =
+          m_fetchedDSComms.find(txBlocks.back().GetHeader().GetDSBlockNum());
+      if (it1 != m_fetchedDSComms.end()) {
+        dsComm = it1->second;
+      }
+      auto it2 =
+          m_fetchedBlocklinks.find(txBlocks.back().GetHeader().GetDSBlockNum());
+      if (it2 != m_fetchedBlocklinks.end()) {
+        blocklink = it2->second;
+      }
+    }
+    auto res =
+        m_mediator.m_validator->CheckTxBlocks(txBlocks, dsComm, blocklink);
     switch (res) {
       case Validator::TxBlockValidationMsg::VALID:
 #ifdef SJ_TEST_SJ_TXNBLKS_PROCESS_SLOW
@@ -5057,7 +5076,7 @@ bool Lookup::ProcessSetDirectoryBlocksFromSeed(
 
     if (!m_mediator.m_validator->CheckDirBlocks(
             dirBlocks, m_mediator.m_blocklinkchain.GetBuiltDSComm(), index_num,
-            newDScomm)) {
+            newDScomm, m_mediator)) {
       LOG_GENERAL(WARNING, "Verification of ds information failed");
     } else {
       LOG_GENERAL(INFO, "[DSINFOVERIF]"

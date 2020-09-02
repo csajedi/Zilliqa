@@ -36,6 +36,7 @@
 #include "libData/BlockData/Block/TxBlock.h"
 #include "libNetwork/Peer.h"
 #include "libNetwork/ShardStruct.h"
+#include "libPersistence/BlockStorage.h"
 #include "libUtils/IPConverter.h"
 #include "libUtils/Logger.h"
 
@@ -161,7 +162,8 @@ class Lookup : public Executable {
   void RetrieveDSBlocks(std::vector<DSBlock>& dsBlocks, uint64_t& lowBlockNum,
                         uint64_t& highBlockNum, bool partialRetrieve = false);
   void RetrieveTxBlocks(std::vector<TxBlock>& txBlocks, uint64_t& lowBlockNum,
-                        uint64_t& highBlockNum);
+                        uint64_t& highBlockNum,
+                        bool allowFromPrevDSEpoch = false);
 
  public:
   /// Constructor.
@@ -478,6 +480,8 @@ class Lookup : public Executable {
   std::mutex m_mutexLatestDSBlockUpdation;
   std::condition_variable cv_latestDSBlock;
   bool m_confirmedLatestDSBlock = false;
+  std::map<uint64_t, DequeOfNode> m_fetchedDSComms;
+  std::map<uint64_t, BlockLink> m_fetchedBlocklinks;
 
   std::mutex m_MutexCVSetTxBlockFromSeed;
   std::condition_variable cv_setTxBlockFromSeed;
