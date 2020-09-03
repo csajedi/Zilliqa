@@ -2660,7 +2660,7 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
 
   // If first epoch and I'm a lookup and I am not syncing right now
   if ((m_mediator.m_currentEpochNum <= 1) && LOOKUP_NODE_MODE &&
-      (GetSyncType() != SyncType::NO_SYNC)) {
+      (GetSyncType() == SyncType::NO_SYNC)) {
     // Sender must be a DS guard (if in guard mode)
     if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(senderPubKey)) {
       LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
