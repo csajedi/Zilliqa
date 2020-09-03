@@ -2658,8 +2658,9 @@ bool Lookup::ProcessSetDSInfoFromSeed(const bytes& message, unsigned int offset,
     return false;
   }
 
-  // If first epoch and I'm a lookup
-  if ((m_mediator.m_currentEpochNum <= 1) && LOOKUP_NODE_MODE) {
+  // If first epoch and I'm a lookup and I am not syncing right now
+  if ((m_mediator.m_currentEpochNum <= 1) && LOOKUP_NODE_MODE &&
+      (GetSyncType() != SyncType::NO_SYNC)) {
     // Sender must be a DS guard (if in guard mode)
     if (GUARD_MODE && !Guard::GetInstance().IsNodeInDSGuardList(senderPubKey)) {
       LOG_EPOCH(WARNING, m_mediator.m_currentEpochNum,
@@ -4772,6 +4773,11 @@ void Lookup::RejoinAsLookup(bool fromLookup) {
             break;
           };
           this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
+        }
+        if (m_seedNodes.empty()) {
+          SetAboveLayer(m_seedNodes,
+                        "node.upper_seed");  // since may have called
+                                             // CleanVariable earlier
         }
         StartSynchronization();
       };
