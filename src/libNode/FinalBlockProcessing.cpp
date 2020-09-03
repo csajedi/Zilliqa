@@ -714,7 +714,8 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       uint64_t recvdDsBlockNum = txBlock.GetHeader().GetDSBlockNum();
       m_mediator.m_lookup->m_confirmedLatestDSBlock = true;
 
-      if (recvdDsBlockNum > latestDSBlockNum) {
+      if ((recvdDsBlockNum > latestDSBlockNum) ||
+          (m_mediator.m_dsBlockChain.GetBlockCount() <= 1)) {
         auto func = [this]() -> void {
           if (!m_mediator.m_lookup->GetDSInfo()) {
             LOG_GENERAL(INFO,
