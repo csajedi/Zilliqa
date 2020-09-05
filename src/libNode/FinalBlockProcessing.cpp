@@ -787,14 +787,18 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Missed some ds block, rejoin
     if (dsBlockNumber >
         m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum()) {
+      bool missedBy2DSEpoch =
+          (dsBlockNumber >
+           m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
+               1);
       if (!LOOKUP_NODE_MODE) {
         RejoinAsNormal();
       } else if (ARCHIVAL_LOOKUP) {
         // Sync from S3
-        m_mediator.m_lookup->RejoinAsNewLookup(false);
+        m_mediator.m_lookup->RejoinAsNewLookup(!missedBy2DSEpoch);
       } else  // Lookup
       {
-        m_mediator.m_lookup->RejoinAsLookup();
+        m_mediator.m_lookup->RejoinAsLookup(!missedBy2DSEpoch);
       }
     }
     // Missed some final block, rejoin
