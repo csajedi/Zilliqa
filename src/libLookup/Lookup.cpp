@@ -4468,7 +4468,12 @@ void Lookup::StartSynchronization() {
       ComposeAndSendGetDirectoryBlocksFromSeed(
           m_mediator.m_blocklinkchain.GetLatestIndex() + 1, ARCHIVAL_LOOKUP,
           LOOKUP_NODE_MODE);
-      GetTxBlockFromLookupNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      if (ARCHIVAL_LOOKUP) {
+        GetTxBlockFromSeedNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      } else {
+        GetTxBlockFromLookupNodes(m_mediator.m_txBlockChain.GetBlockCount(), 0);
+      }
+
       this_thread::sleep_for(chrono::seconds(NEW_NODE_SYNC_INTERVAL));
     }
     // Ask for the sharding structure from lookup (may have got new ds block

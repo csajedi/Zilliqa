@@ -706,7 +706,7 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
                    committeeHash);
     // Lets check if its legitimate hash check failure, if i am lagging behind
     // in prev ds epoch.
-    if (!m_mediator.m_lookup->m_confirmedLatestDSBlock) {
+    if (LOOKUP_NODE_MODE && !m_mediator.m_lookup->m_confirmedLatestDSBlock) {
       // Check if I have a latest DS Info (but do it only once in current ds
       // epoch)
       uint64_t latestDSBlockNum =
@@ -717,9 +717,16 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       if ((recvdDsBlockNum > latestDSBlockNum) ||
           (m_mediator.m_dsBlockChain.GetBlockCount() <= 1)) {
         auto func = [this]() -> void {
+          // set and reset m_synctype to LOOKUP_SYNC - TBD
+          if (ARCHIVAL_LOOKUP) {
+            m_mediator.m_lookup->SetSyncType(SyncType::NEW_LOOKUP_SYNC);
+          } else {
+            m_mediator.m_lookup->SetSyncType(SyncType::LOOKUP_SYNC);
+          }
           if (!m_mediator.m_lookup->GetDSInfo()) {
             LOG_GENERAL(INFO,
                         "I am lagging behind actual ds epoch. Will Rejoin!");
+            m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
             if (ARCHIVAL_LOOKUP) {
               // Sync from S3
               m_mediator.m_lookup->RejoinAsNewLookup(false);
@@ -727,6 +734,8 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
             {
               m_mediator.m_lookup->RejoinAsLookup(false);
             }
+          } else {
+            m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
           }
         };
         DetachedFunction(1, func);
