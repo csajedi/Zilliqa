@@ -446,8 +446,7 @@ bool Node::CheckIntegrity(const bool fromValidateDBBinary) {
   }
 
   if (fromValidateDBBinary) {
-    if (!m_mediator.m_validator->CheckDirBlocks(dirBlocks, dsComm, 1, dsComm,
-                                                m_mediator)) {
+    if (!m_mediator.m_validator->CheckDirBlocks(dirBlocks, dsComm, 1, dsComm)) {
       LOG_GENERAL(WARNING, "Failed to verify Dir Blocks");
       return false;
     }

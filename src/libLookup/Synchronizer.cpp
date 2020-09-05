@@ -127,13 +127,25 @@ bool Synchronizer::FetchDSInfo(Lookup* lookup) {
 
 bool Synchronizer::FetchLatestDSBlocks(Lookup* lookup,
                                        uint64_t currentBlockChainSize) {
-  LOG_MARKER();
+  if (LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Synchronizer::FetchLatestDSBlocks not expected to be "
+                "called from LookUp node.");
+    return true;
+  }
+
   return lookup->GetDSBlockFromLookupNodes(currentBlockChainSize, 0);
 }
 
 bool Synchronizer::FetchLatestDSBlocksSeed(Lookup* lookup,
                                            uint64_t currentBlockChainSize) {
-  LOG_MARKER();
+  if (LOOKUP_NODE_MODE) {
+    LOG_GENERAL(WARNING,
+                "Synchronizer::FetchLatestDSBlocksSeed not expected to be "
+                "called from LookUp node.");
+    return true;
+  }
+
   return lookup->GetDSBlockFromSeedNodes(currentBlockChainSize, 0);
 }
 

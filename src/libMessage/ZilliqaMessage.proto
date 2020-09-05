@@ -725,7 +725,6 @@ message LookupGetTxBlockFromSeed
     uint64 lowblocknum     = 1;
     uint64 highblocknum    = 2;
     uint32 listenport      = 3;
-    ByteArray senderpubkey = 4;
 }
 
 // From lookup nodes to new join lookup node or new join normal node.
