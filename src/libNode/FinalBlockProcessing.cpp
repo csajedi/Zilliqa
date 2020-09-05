@@ -717,7 +717,6 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
       if ((recvdDsBlockNum > latestDSBlockNum) ||
           (m_mediator.m_dsBlockChain.GetBlockCount() <= 1)) {
         auto func = [this]() -> void {
-          // set and reset m_synctype to LOOKUP_SYNC - TBD
           if (ARCHIVAL_LOOKUP) {
             m_mediator.m_lookup->SetSyncType(SyncType::NEW_LOOKUP_SYNC);
           } else {
@@ -787,17 +786,18 @@ bool Node::ProcessFinalBlockCore(uint64_t& dsBlockNumber,
     // Missed some ds block, rejoin
     if (dsBlockNumber >
         m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum()) {
-      bool missedBy2DSEpoch =
-          (dsBlockNumber >
-           m_mediator.m_dsBlockChain.GetLastBlock().GetHeader().GetBlockNum() +
-               1);
       if (!LOOKUP_NODE_MODE) {
         RejoinAsNormal();
       } else if (ARCHIVAL_LOOKUP) {
         // Sync from S3
-        m_mediator.m_lookup->RejoinAsNewLookup(!missedBy2DSEpoch);
+        m_mediator.m_lookup->RejoinAsNewLookup(false);
       } else  // Lookup
       {
+        bool missedBy2DSEpoch =
+            (dsBlockNumber > m_mediator.m_dsBlockChain.GetLastBlock()
+                                     .GetHeader()
+                                     .GetBlockNum() +
+                                 1);
         m_mediator.m_lookup->RejoinAsLookup(!missedBy2DSEpoch);
       }
     }
