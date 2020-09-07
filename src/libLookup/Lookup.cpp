@@ -4711,7 +4711,11 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
         }
 
         // Check if next ds epoch was crossed -cornercase after syncing from S3
-        if (GetDSInfo()) {  // have same ds committee as upper seeds.
+        if ((m_mediator.m_txBlockChain.GetBlockCount() %
+                 NUM_FINAL_BLOCK_PER_POW ==
+             0)                // Can fetch dsblock and txblks from new ds epoch
+            || GetDSInfo()) {  // have same ds committee as upper seeds to
+                               // confirm if no new ds epoch started
           InitSync();
         } else {
           // Sync from S3 again
@@ -4787,7 +4791,11 @@ void Lookup::RejoinAsLookup(bool fromLookup) {
         }
         // Check if next ds epoch was crossed - corner case after syncing from
         // S3
-        if (GetDSInfo()) {  // have same ds committee as other lookups.
+        if ((m_mediator.m_txBlockChain.GetBlockCount() %
+                 NUM_FINAL_BLOCK_PER_POW ==
+             0)                // Can fetch dsblock and txblks from new ds epoch
+            || GetDSInfo()) {  // have same ds committee as other lookups to
+                               // confirm if no new ds epoch started
           StartSynchronization();
         } else {
           // Sync from S3 again
