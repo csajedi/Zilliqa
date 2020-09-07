@@ -4699,7 +4699,27 @@ void Lookup::RejoinAsNewLookup(bool fromLookup) {
           };
           this_thread::sleep_for(chrono::seconds(RETRY_REJOINING_TIMEOUT));
         }
-        InitSync();
+
+        if (m_seedNodes.empty()) {
+          SetAboveLayer(m_seedNodes,
+                        "node.upper_seed");  // since may have called
+                                             // CleanVariable earlier
+        }
+
+        if (!MULTIPLIER_SYNC_MODE && m_l2lDataProviders.empty()) {
+          SetAboveLayer(m_l2lDataProviders, "node.l2l_data_providers");
+        }
+
+        // Check if next ds epoch was crossed -cornercase after syncing from S3
+        if (GetDSInfo()) {  // have same ds committee as upper seeds.
+          InitSync();
+        } else {
+          // Sync from S3 again
+          LOG_GENERAL(INFO,
+                      "I am lagging behind by ds epoch! Will rejoin again!");
+          m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
+          RejoinAsLookup(false);
+        }
       };
       DetachedFunction(1, func2);
     }
@@ -4771,10 +4791,18 @@ void Lookup::RejoinAsLookup(bool fromLookup) {
           StartSynchronization();
         } else {
           // Sync from S3 again
-          this_thread::sleep_for(
-              chrono::milliseconds(NEW_LOOKUP_SYNC_DELAY_IN_SECONDS));
+          LOG_GENERAL(
+              INFO,
+              "I am lagging behind again by ds epoch! Will rejoin again!");
           m_mediator.m_lookup->SetSyncType(SyncType::NO_SYNC);
           RejoinAsLookup(false);
+          /* Note: We would like to try to sync the missing txblocks that comes
+             before and after next ds epoch from other lookups. ( instead of
+             complete sync from S3) However, we dont't store the statedeltas
+             from previous ds epoch. So can't fetch the statedeltas for txblocks
+             that comes before next ds epoch. So those txblks would fails the
+             verification.
+          */
         }
       };
       DetachedFunction(1, func2);
